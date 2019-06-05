@@ -1,6 +1,5 @@
 # inbetween_tool
- A simple inbetweening application written by python and tkinter.
- 
- inbetween_gui.py is code of this application and other file is used to automate the inbetweening.
- 
- I am going to try unifing these codes to make automated inbetweening application.
+二つの原画を対応づけて描くことで中間動画（中割り）を生成するソフトです。pythonとtkinterで書かれています。
+
+現在は手動で線を対応づけなければうまく動作しませんが機械学習とマッチングの技術を用いて自動で線を対応づけて中割りを生成する研究を行なっています。
+そのコードも合わせて載せています。
