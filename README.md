@@ -1,5 +1,4 @@
 # 中割り生成ソフト
-二つの原画を対応づけて描くことで中間動画（中割り）を生成するソフトです。pythonとtkinterで書かれています。
-
-現在は手動で線を対応づけなければうまく動作しませんが機械学習とマッチングの技術を用いて自動で線を対応づけて中割りを生成する研究を行なっています。
-そのコードも合わせて載せています。
+This software is written in python and tkinter.
+Currently, the software does not work well unless the lines are manually matched, but we are working on generating the intermediate split by automatically matching lines using machine learning and matching techniques.
+The code is also included.
