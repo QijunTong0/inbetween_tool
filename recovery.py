@@ -1,62 +1,108 @@
-# -*- coding: utf-8 -*-
-#データの復元
+"""キーフレームデータの読み込みと点列のリサンプリングを行うモジュール。
 
-def length(points):
-    leng=0
-    for i in range(1,len(points)):
-        leng += np.linalg.norm(np.array(points[i])-np.array(points[i-1]))
-    return(leng)
-def sampling(lines,rate=2):
-    new=[]
+アニメーションの中割りに使用する2枚のキーフレームを pickle ファイルから読み込み、
+一定間隔で再サンプリングして返す。
+"""
+
+from __future__ import annotations
+
+import pickle
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import numpy.typing as npt
+from scipy import interpolate
+
+
+def compute_stroke_length(points: list[list[float]]) -> float:
+    """点列の総弧長（折れ線の全長）を計算する。
+
+    Args:
+        points: (x, y) 座標のリスト。
+
+    Returns:
+        隣接点間のユークリッド距離の総和。
+    """
+    total = 0.0
+    for i in range(1, len(points)):
+        total += float(np.linalg.norm(np.array(points[i]) - np.array(points[i - 1])))
+    return total
+
+
+def resample_strokes(
+    lines: list[list[list[float]]],
+    rate: float = 2.0,
+) -> list[list[list[int]]]:
+    """各ストロークを指定したピクセル間隔で等間隔リサンプリングする。
+
+    PCHIP 補間を使ってストロークを滑らかに補間し、
+    `rate` ピクセルごとに点を配置した新しい点列を返す。
+
+    Args:
+        lines: ストロークのリスト。各ストロークは (x, y) 座標のリスト。
+        rate: サンプリング間隔（ピクセル単位）。デフォルトは 2.0。
+
+    Returns:
+        リサンプリング後のストロークのリスト。
+    """
+    resampled: list[list[list[int]]] = []
     for line in lines:
-        sample=[]
-        x=np.array(line)[:,0]
-        y=np.array(line)[:,1]
-        ts=np.linspace(0,1,len(line))
-        in1 = interpolate.PchipInterpolator(ts, x)
-        in2 = interpolate.PchipInterpolator(ts, y)
-        for i in range(1,len(ts)):
-            Leng=np.sqrt((x[i]-x[i-1])**2+(y[i]-y[i-1])**2)
-            t=np.linspace(ts[i-1],ts[i],int(Leng/rate+1))
-            for j in t:
-                sample.append([int(in1(j)),int(in2(j))])
-        new.append(sample)
-    return(new)
-def plot_line():
-    cmap=plt.get_cmap("jet")
-    temp=0
-    for i in key_points_array:
-        j=np.array(i)
-        plt.plot(j[:,0],-j[:,1],color=cmap(temp/len(key_points_array)))
-        temp+=1
+        sample: list[list[int]] = []
+        x = np.array(line)[:, 0]
+        y = np.array(line)[:, 1]
+        ts = np.linspace(0.0, 1.0, len(line))
+        interp_x = interpolate.PchipInterpolator(ts, x)
+        interp_y = interpolate.PchipInterpolator(ts, y)
+        for i in range(1, len(ts)):
+            seg_len = np.sqrt((x[i] - x[i - 1]) ** 2 + (y[i] - y[i - 1]) ** 2)
+            t_vals = np.linspace(ts[i - 1], ts[i], int(seg_len / rate + 1))
+            for t in t_vals:
+                sample.append([int(interp_x(t)), int(interp_y(t))])
+        resampled.append(sample)
+    return resampled
+
+
+def plot_strokes(strokes: list[list[list[float]]]) -> None:
+    """ストローク群を jet カラーマップで描画する（y 軸は上向きに反転）。
+
+    Args:
+        strokes: 描画するストロークのリスト。
+    """
+    cmap = plt.get_cmap("jet")
+    for idx, stroke in enumerate(strokes):
+        pts = np.array(stroke)
+        color = cmap(idx / len(strokes))
+        plt.plot(pts[:, 0], -pts[:, 1], color=color)
     plt.xticks([])
     plt.yticks([])
-with open('key1_2.p', 'rb') as f:
-    key1_points_array = pickle.load(f)
-with open('key2_2.p', 'rb') as f:
-    key2_points_array = pickle.load(f)
-    
-del key1_points_array[-1]
-del key2_points_array[-1]
-key1_points_array=sampling(key1_points_array,rate=2)
-key2_points_array=sampling(key2_points_array,rate=2)
-allpoints1=[]
-allpoints2=[]
-for i in (key1_points_array):
-    allpoints1=allpoints1+i
-for i in (key2_points_array):
-    allpoints2=allpoints2+i
 
-allpoints1=np.array(allpoints1)
-allpoints2=np.array(allpoints2)
-m1=len(allpoints1)
-m2=len(allpoints2)
-#plot_line()
-plt.scatter(allpoints1[:,0],-allpoints1[:,1],s=2)
-plt.show()
-plt.scatter(allpoints2[:,0],-allpoints2[:,1],s=2)
-plt.show()
-#データの保存
-#np.savetxt('kpca.csv', Cpca_prod, delimiter=',')
-#pickle.dump(key1.points_array,open("key1.p","wb"))
-#pickle.dump(key2.points_array,open("key2.p","wb"))
+
+def load_keyframes(
+    path1: str | Path = "key1_2.p",
+    path2: str | Path = "key2_2.p",
+    resample_rate: float = 2.0,
+) -> tuple[list[list[list[int]]], list[list[list[int]]]]:
+    """pickle ファイルからキーフレームデータを読み込み、リサンプリングして返す。
+
+    各ファイルの末尾要素（空ストロークなど）を除去した後、
+    `resample_rate` の間隔でリサンプリングする。
+
+    Args:
+        path1: キーフレーム1 の pickle ファイルパス。
+        path2: キーフレーム2 の pickle ファイルパス。
+        resample_rate: サンプリング間隔（ピクセル単位）。
+
+    Returns:
+        (key1_strokes, key2_strokes) のタプル。
+    """
+    with open(path1, "rb") as f:
+        key1: list[list[list[float]]] = pickle.load(f)
+    with open(path2, "rb") as f:
+        key2: list[list[list[float]]] = pickle.load(f)
+
+    # 末尾の空ストロークを除去
+    del key1[-1]
+    del key2[-1]
+
+    return resample_strokes(key1, rate=resample_rate), resample_strokes(key2, rate=resample_rate)
